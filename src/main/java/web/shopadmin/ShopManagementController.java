@@ -2,26 +2,34 @@ package web.shopadmin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dto.ShopExecution;
+import entity.Area;
 import entity.PersonInfo;
 import entity.Shop;
+import entity.ShopCategory;
 import enums.ShopStateEnum;
 import exceptions.ShopOperationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.multipart.commons.CommonsMultipartFile;
 import org.springframework.web.multipart.commons.CommonsMultipartResolver;
+import service.AreaService;
+import service.ShopCategoryService;
 import service.ShopService;
+import util.CodeUtil;
 import util.HttpServletRequestUtil;
 import util.ImageUtil;
 import util.PathUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,15 +42,45 @@ public class ShopManagementController {
 
     private final ShopService shopService;
 
+    private final ShopCategoryService shopCategoryService;
+
+    private final AreaService areaService;
+
     @Autowired
-    public ShopManagementController(ShopService shopService) {
+    public ShopManagementController(ShopService shopService, ShopCategoryService shopCategoryService, AreaService areaService) {
         this.shopService = shopService;
+        this.shopCategoryService = shopCategoryService;
+        this.areaService = areaService;
+    }
+
+    @GetMapping("/getshopinitinfo")
+    @ResponseBody
+    private Map<String, Object> getShopInitInfo(){
+        Map<String, Object> modelMap = new HashMap<>();
+        List<ShopCategory> shopCategoryList = new ArrayList<>();
+        List<Area> areaList = new ArrayList<>();
+        try {
+            shopCategoryList = shopCategoryService.getShopCategoryList(new ShopCategory());
+            areaList = areaService.getAreaList();
+            modelMap.put("shopCategoryList", shopCategoryList);
+            modelMap.put("areaList", areaList);
+            modelMap.put("success", true);
+        }catch (Exception e){
+            modelMap.put("success",false);
+            modelMap.put("errMsg", e.getMessage());
+        }
+        return modelMap;
     }
 
     @PostMapping("/registershop")
     @ResponseBody
     private Map<String, Object> registerShop(HttpServletRequest request){
         Map<String, Object> modelMap = new HashMap<>();
+        if (!CodeUtil.checkVerifyCode(request)){
+            modelMap.put("success", false);
+            modelMap.put("errMsg", "输入了错误的验证码");
+            return modelMap;
+        }
         //1.接受并转换相应的参数，包括店铺信息和图片信息
         String shopStr = HttpServletRequestUtil.getString(request,"shopStr");
         ObjectMapper mapper = new ObjectMapper();
@@ -70,6 +108,7 @@ public class ShopManagementController {
             PersonInfo owner = new PersonInfo();
             //session TODO
             owner.setUserId(1L);
+            shop.setOwner(owner);
             ShopExecution se;
             try {
                 se = shopService.addShop(shop, shopImg.getInputStream(),shopImg.getOriginalFilename());
